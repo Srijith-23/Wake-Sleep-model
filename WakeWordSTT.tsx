@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Settings, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Settings, Trash2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const WakeWordSTT = () => {
@@ -150,7 +150,14 @@ const WakeWordSTT = () => {
             </div>
 
             {/* Status Description */}
-            <p className="text-center text-muted-foreground">{stateInfo.description}</p>
+            <div className="text-center space-y-1">
+              <p className="text-muted-foreground">{stateInfo.description}</p>
+              {state !== 'idle' && (
+                <p className="text-xs text-muted-foreground">
+                  ⚡ Auto-stops after 2 minutes of inactivity
+                </p>
+              )}
+            </div>
 
             {/* Action Buttons */}
             <div className="flex gap-3 justify-center">
@@ -248,29 +255,40 @@ const WakeWordSTT = () => {
 
         {/* Info Card */}
         <Card className="p-6 bg-card/50">
-          <h3 className="text-lg font-semibold mb-3">How to Use</h3>
-          <ol className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex gap-2">
-              <span className="font-semibold text-primary">1.</span>
-              Click the microphone button to start listening for the wake word
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-primary">2.</span>
-              Say the wake word ("{wakeWord}") to begin transcription
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-primary">3.</span>
-              Speak naturally - your words will be transcribed in real-time
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-primary">4.</span>
-              Say the sleep word ("{sleepWord}") to pause transcription
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-primary">5.</span>
-              Repeat steps 2-4 as needed, or click the microphone to stop completely
-            </li>
-          </ol>
+          <div className="flex items-center gap-2 mb-4">
+            <Info className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">How to Use</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-medium mb-2">Getting Started:</p>
+              <ol className="space-y-2 text-sm text-muted-foreground ml-4">
+                <li>1. Click the microphone button to start wake word detection</li>
+                <li>2. Say "{wakeWord}" to activate full transcription mode</li>
+              </ol>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium mb-2">During Transcription:</p>
+              <ol className="space-y-2 text-sm text-muted-foreground ml-4">
+                <li>3. Speak normally - your words will be transcribed in real-time</li>
+                <li>4. Say "{sleepWord}" to pause and return to wake word mode</li>
+                <li>5. Say "{wakeWord}" again to resume transcribing</li>
+                <li>6. Click the microphone to stop completely</li>
+              </ol>
+            </div>
+
+            <div className="pt-3 border-t border-border">
+              <p className="text-sm font-medium mb-1 flex items-center gap-2">
+                ⚡ Efficiency Optimized
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Recognition dynamically switches between lightweight wake word detection and full transcription modes. 
+                Auto-stops after 2 minutes of inactivity to minimize compute resources.
+              </p>
+            </div>
+          </div>
         </Card>
       </div>
     </div>
