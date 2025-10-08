@@ -30,6 +30,9 @@ export const useSpeechRecognition = ({
 
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const restartAttemptsRef = useRef(0);
+  const maxRestartAttempts = 3;
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -37,12 +40,15 @@ export const useSpeechRecognition = ({
 
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
+      recognitionRef.current.continuous = false; // Changed to false for better control
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = 'en-US';
     }
 
     return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -77,6 +83,19 @@ export const useSpeechRecognition = ({
     }
   }, [onTranscript]);
 
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    // Auto-stop after 2 minutes of inactivity in wake word listening mode
+    if (state === 'listening-for-wake') {
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('Auto-stopping due to inactivity');
+        stop();
+      }, 120000); // 2 minutes
+    }
+  }, [state]);
+
   const checkForWakeWord = useCallback((text: string) => {
     const normalizedText = text.toLowerCase().trim();
     const normalizedWakeWord = wakeWord.toLowerCase().trim();
@@ -84,6 +103,7 @@ export const useSpeechRecognition = ({
     if (normalizedText.includes(normalizedWakeWord)) {
       console.log('Wake word detected:', wakeWord);
       updateState('transcribing');
+      restartAttemptsRef.current = 0; // Reset restart attempts on successful wake word
       return true;
     }
     return false;
@@ -120,17 +140,28 @@ export const useSpeechRecognition = ({
         }
       }
 
+      // Reset inactivity timer on any speech
+      resetInactivityTimer();
+
       if (state === 'listening-for-wake') {
         // Check both interim and final results for wake word
         const textToCheck = finalText || interimText;
         if (checkForWakeWord(textToCheck)) {
           // Don't add the wake word to transcripts
+          // Switch to continuous mode for transcription
+          if (recognitionRef.current) {
+            recognitionRef.current.continuous = true;
+          }
           return;
         }
       } else if (state === 'transcribing') {
         // Check for sleep word first
         if (finalText && checkForSleepWord(finalText)) {
           // Don't add the sleep word to transcripts
+          // Switch back to non-continuous mode for wake word detection
+          if (recognitionRef.current) {
+            recognitionRef.current.continuous = false;
+          }
           return;
         }
         
@@ -158,15 +189,22 @@ export const useSpeechRecognition = ({
 
     recognition.onend = () => {
       // Automatically restart if we should be listening
-      if (isListeningRef.current) {
+      if (isListeningRef.current && restartAttemptsRef.current < maxRestartAttempts) {
         try {
+          restartAttemptsRef.current++;
+          console.log(`Restarting recognition (attempt ${restartAttemptsRef.current})`);
           recognition.start();
         } catch (e) {
           console.error('Error restarting recognition:', e);
+          if (restartAttemptsRef.current >= maxRestartAttempts) {
+            setError('Speech recognition stopped. Please restart manually.');
+            isListeningRef.current = false;
+            updateState('idle');
+          }
         }
       }
     };
-  }, [state, checkForWakeWord, checkForSleepWord, addTranscript]);
+  }, [state, checkForWakeWord, checkForSleepWord, addTranscript, resetInactivityTimer, updateState]);
 
   const start = useCallback(() => {
     if (!isSupported || !recognitionRef.current) {
@@ -177,25 +215,33 @@ export const useSpeechRecognition = ({
     try {
       setError(null);
       isListeningRef.current = true;
+      restartAttemptsRef.current = 0;
+      recognitionRef.current.continuous = false; // Start in wake word detection mode
       updateState('listening-for-wake');
       recognitionRef.current.start();
-      console.log('Speech recognition started');
+      resetInactivityTimer(); // Start inactivity timer
+      console.log('Speech recognition started in wake word detection mode');
     } catch (e: any) {
       if (e.message && !e.message.includes('already started')) {
         setError(`Failed to start recognition: ${e.message}`);
       }
     }
-  }, [isSupported, updateState]);
+  }, [isSupported, updateState, resetInactivityTimer]);
 
   const stop = useCallback(() => {
     if (!recognitionRef.current) return;
 
     try {
       isListeningRef.current = false;
+      restartAttemptsRef.current = 0;
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
       recognitionRef.current.stop();
       updateState('idle');
       setInterimTranscript('');
-      console.log('Speech recognition stopped');
+      console.log('Speech recognition stopped completely');
     } catch (e) {
       console.error('Error stopping recognition:', e);
     }
